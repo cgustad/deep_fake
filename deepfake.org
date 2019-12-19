@@ -1,0 +1,5 @@
+* What is this kernel about
+* OpenCV funcitonality
+* Derived values
+* Videos
+* Baseline model

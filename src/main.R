@@ -9,6 +9,8 @@ library(scales)
 library(imager)
 library(reshape2)
 library(ggplot2)
+
+
 root_path <- '~/github/kaggle/deepfake/'
 setwd(root_path)
 
@@ -23,9 +25,6 @@ test_video_path <- paste0(train_video_path,test_video_name)
 
 
 analyze_image <- function(img_dir,mask_dir){
-    #mpath <<- system.file(mask_dir,package='imager')
-    #img_dir <<- system.file(img_dir,package='imager')
-    print('gathering image metrics')
     ## Run img
     img <<- load.image(img_dir)
     ## Total red
@@ -35,16 +34,13 @@ analyze_image <- function(img_dir,mask_dir){
     ## Total blue
     total_blue <- sum(img[,,,3])
     ## Total color
-    tot_col <- total_red + total_green + total_blue
-    
+    tot_col <- total_red + total_green + total_blue  
     ## Run mask
     mask <<- load.image(mask_dir)
     ## Size face
-    size_face <- sum(mask[,,1,]!= 0)
-    
+    size_face <- sum(mask[,,1,]!= 0) 
     ## Return vector
     out_vec <- tibble(red=total_red,green=total_green,blue=total_blue,tot_color=tot_col,size=size_face)
-    print('Analyzed photo')
     return(out_vec)
 }
 make_analysis_video <- function(dataframe,vid_name,size_plot = FALSE,col_plot = TRUE,makevids = TRUE){
@@ -106,29 +102,24 @@ make_analysis_video <- function(dataframe,vid_name,size_plot = FALSE,col_plot = 
     
 }
 
-gen_face_mask <- function(image,counter){
-    # Genereate image from path
-
-    return(face_mask_path)
-}
-
 
 run_video <- function(video_path,make_img = FALSE,analyze_img = FALSE,create_vid = FALSE){
     # Video name
-    vid_name <- str_split(tail(str_split(test_video_path,'/')[[1]],1),'\\.')[[1]][1]
-    video_data_dir <<- paste0(root_data_path,vid_name,'/')
+    vid_name <- str_split(tail(str_split(video_path,'/')[[1]],1),'\\.')[[1]][1]
+    video_data_dir <- paste0(root_data_path,vid_name,'/')
     dir.create(video_data_dir,showWarnings = FALSE)
-    print(paste0('Running video at:', video_data_dir))
+    print(paste0('Writing data at:', video_data_dir))
     # Generate images from video
     if(make_img == TRUE){
         # Set path and create directory
         destdir <- paste0(video_data_dir,'frames')
         dir.create(destdir,showWarnings = FALSE)
         ## Grab images
-        image_paths <<- av_video_images(video_path,destdir=destdir,format='jpg')
+        image_paths <- av_video_images(video_path,destdir=destdir,format='jpg')
     }
     # Analyze output from videos
     if(analyze_img == TRUE){
+        dir.create(paste0(video_data_dir,'mask/'),showWarnings = FALSE)
         # Initalize variables
         img_dat <- data.frame(red=numeric(),green=numeric(),blue=numeric(),tot_color=numeric(),size=integer()) %>% as_tibble()
         for(image in image_paths){
@@ -151,12 +142,17 @@ run_video <- function(video_path,make_img = FALSE,analyze_img = FALSE,create_vid
         dir.create('./dat/vids',showWarnings = FALSE)
         make_analysis_video(img_dat, vid_name,)
     }
+    
 }
 
 run <- function(){
-    test_video <- list.files(test_video_path)
-    for (video in test_video){
-        video_path <- paste0(test_video_path, test_video)
-        print(video_path)
+    data <- list(0)
+    train_video <- list.files(train_video_path,'.mp4$')
+    for (video in train_video[1:5]){
+        video_path <<- paste0(train_video_path,video)
+        print(paste0('Currently on:',video_path))
+        out_dat <- run_video(video_path,create_vid = TRUE,make_img = TRUE, analyze_img=TRUE)
+        data[[video]] <- out_dat
     }
+    return(data)
 }
