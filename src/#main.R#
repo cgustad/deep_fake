@@ -1,0 +1,159 @@
+## Libraries
+library(av)
+library(tidyverse)
+library(stringr)
+library(opencv)
+library(magick)
+library(ggplot2)
+library(scales)
+library(imager)
+library(reshape2)
+library(ggplot2)
+root_path <- '~/github/kaggle/deepfake/'
+setwd(root_path)
+
+test_video_path <- "./input/test_videos/"
+train_video_path <- "./input/train_sample_videos/"
+root_data_path <- "./dat/"
+dir.create(root_data_path,showWarnings = FALSE)
+#train_image_path <- "./dat/"
+
+test_video_name <- "aagfhgtpmv.mp4"
+test_video_path <- paste0(train_video_path,test_video_name)
+
+
+analyze_image <- function(img_dir,mask_dir){
+    #mpath <<- system.file(mask_dir,package='imager')
+    #img_dir <<- system.file(img_dir,package='imager')
+    print('gathering image metrics')
+    ## Run img
+    img <<- load.image(img_dir)
+    ## Total red
+    total_red <- sum(img[,,,1])
+    ## Total green
+    total_green <- sum(img[,,,2])
+    ## Total blue
+    total_blue <- sum(img[,,,3])
+    ## Total color
+    tot_col <- total_red + total_green + total_blue
+    
+    ## Run mask
+    mask <<- load.image(mask_dir)
+    ## Size face
+    size_face <- sum(mask[,,1,]!= 0)
+    
+    ## Return vector
+    out_vec <- tibble(red=total_red,green=total_green,blue=total_blue,tot_color=tot_col,size=size_face)
+    print('Analyzed photo')
+    return(out_vec)
+}
+make_analysis_video <- function(dataframe,vid_name,size_plot = FALSE,col_plot = TRUE,makevids = TRUE){
+    # Create directory for plots
+    dir.create(paste0('./dat/img/',vid_name,'/plot/'),showWarnings = FALSE)
+    dir.create(paste0('./dat/vids/',vid_name,'/'),showWarnings = FALSE)
+    ## Cplot RGB values
+    if(col_plot == TRUE){
+        make_rgb <- function(save = FALSE){
+            ## Create dir
+            dir.create(paste0('./dat/img/',vid_name,'/plot/RGB/'),showWarnings = FALSE)
+            rgb_paths = list(0)
+            for(curr_frame in 2:nrow(dataframe)){
+                ## Find maximal and minimal y value for nicer look
+                min_y <- dataframe %>% select(red,blue,green) %>% min
+                max_y <- dataframe %>% select(red,blue,green) %>% max
+                ##Plot
+                out_frame <- dataframe %>%
+                    filter(frame <= curr_frame) %>% 
+                    select(red,blue,green,frame) %>%
+                    ggplot(.,aes(x=frame)) +
+                    geom_line(aes(y=red),color="red") +
+                    geom_line(aes(y=blue),color="blue") +
+                    geom_line(aes(y=green),color="green") +
+                    ylim(min_y,max_y) +
+                    xlim(curr_frame - 10, curr_frame + 10)
+                
+                ## Save image
+                if(save==TRUE){
+                    plot_path <- paste0('./dat/img/',vid_name,'/plot/RGB/RGB_plot',curr_frame,'.jpg')
+                    ggsave(plot_path)
+                    rgb_paths[curr_frame] <<- plot_path
+                }
+                print(out_frame)
+            }
+        }
+        ## Generate video of plots
+        if(makevids== TRUE){
+            vid_path <- paste0('./dat/vids/',vid_name,'/RGB.mp4')
+            print(paste0('Generating video: ',vid_path))
+            av_capture_graphics(make_rgb(), vid_path, 1280, 720, res = 144, framerate = 30)
+        }
+        else if (makevids == FALSE){
+            make_rgb(save==TRUE)
+        }
+    }
+
+    ## Size of head plot   
+    if(size_plot == TRUE){
+        for(curr_frame in 1:nrow(dataframe)){
+    
+            print('generating size plot')
+            current_df <- dataframe %>%
+                filter(frame <= curr_frame) %>%
+                ggplot(.,aes(x=frame, y=size)) + geom_line()
+            ggsave(paste0('./dat/img/',vid_name,'/plot/size/',curr_frame,'.jpg'))
+        }
+    }
+    
+}
+
+
+run_video <- function(video_path,make_img = FALSE,analyze_img = FALSE,create_vid = FALSE){
+    # Video name
+    vid_name <- str_split(tail(str_split(test_video_path,'/')[[1]],1),'\\.')[[1]][1]
+    video_data_dir <<- paste0(root_data_path,vid_name,'/')
+    dir.create(video_data_dir,showWarnings = FALSE)
+    print(paste0('Running video at:', video_data_dir))
+    # Generate images from video
+    if(make_img == TRUE){
+        # Set path and create directory
+        destdir <- paste0(video_data_dir,'frames')
+        dir.create(destdir,showWarnings = FALSE)
+        ## Grab images
+        image_paths <<- av_video_images(video_path,destdir=destdir,format='jpg')
+    }
+    # Analyze output from videos
+    if(analyze_img == TRUE){
+        dir.create(paste0(video_data_dir,'mask/'))
+        # Initalize variables
+        img_dat <- data.frame(red=numeric(),green=numeric(),blue=numeric(),tot_color=numeric(),size=integer()) %>% as_tibble()
+        for(image in image_paths){
+            image_name <- tail(str_split(image,'/')[[1]],1)
+            ## Generate face mask data
+            ocv_img <- ocv_read(image)
+            face_mask_img <- ocv_facemask(ocv_img)
+            destdir <- paste0(video_data_dir,'mask/',image_name)
+            mask_path <- ocv_write(face_mask_img,destdir)
+            ## Run analysis
+            ana_dat <- analyze_image(image,mask_path)
+            img_dat <- rbind(img_dat,ana_dat)
+        }
+        csv_path <- paste0('./dat/',vid_name,'/data.csv')
+        write.table(img_dat,file = csv_path)
+        print('Data extracted from image')
+        return(img_dat)
+    }
+    if(create_vid == TRUE){
+        dir.create('./dat/vids',showWarnings = FALSE)
+        make_analysis_video(img_dat, vid_name,)
+    }
+    
+}
+
+run <- function(){
+    train_video <- list.files(train_video_path)
+    train_video_paths <<- paste0(train_video_path,train_video)
+    for (video in test_video){
+        video_path <- paste0(test_video_path, test_video)
+        print(video_path)
+    }
+}
